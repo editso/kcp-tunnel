@@ -19,9 +19,9 @@ struct Args {
 async fn main() -> std::io::Result<()> {
     env_logger::builder()
         .default_format()
-        .filter(Some("kcp_rust"), log::LevelFilter::Trace)
+        // .filter_module("kcp_rust", log::LevelFilter::Info)
         .filter_module("kcp_tunnel", log::LevelFilter::Trace)
-        .filter_level(log::LevelFilter::Trace)
+        .filter_level(log::LevelFilter::Info)
         .init();
 
     let args = Args::parse();
@@ -29,6 +29,7 @@ async fn main() -> std::io::Result<()> {
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(works)
+        .event_interval(10)
         .enable_all()
         .build()?;
 
