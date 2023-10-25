@@ -1,4 +1,5 @@
 use clap::Parser;
+use kcp_rust::Config;
 use std::{net::SocketAddr, sync::Arc};
 
 use kcp_tunnel::KcpRuntimeWithTokio;
@@ -15,47 +16,60 @@ struct Args {
     works: usize,
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread", worker_threads = 6)]
 async fn main() -> std::io::Result<()> {
     env_logger::builder()
         .default_format()
-        // .filter_module("kcp_rust", log::LevelFilter::Info)
-        .filter_module("kcp_tunnel", log::LevelFilter::Trace)
-        .filter_level(log::LevelFilter::Info)
+        // .filter_module("kcp_rust", log::LevelFilter::Trace)
+        .filter_level(log::LevelFilter::Trace)
         .init();
 
     let args = Args::parse();
     let works = args.works.min(6);
+    let config = Config::default();
 
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(works)
-        .event_interval(10)
-        .enable_all()
-        .build()?;
-
-    let kcp_listener = kcp_rust::KcpListener::new::<KcpRuntimeWithTokio>({
-        let udp = tokio::net::UdpSocket::bind(args.tunnel).await?;
-        kcp_tunnel::TunnelSocket(Arc::new(udp))
-    })?;
+    let kcp_listener = kcp_rust::KcpListener::new::<KcpRuntimeWithTokio>(
+        {
+            let udp = tokio::net::UdpSocket::bind(args.tunnel).await?;
+            kcp_tunnel::TunnelSocket(Arc::new(udp))
+        },
+        config,
+    )?;
 
     log::info!("work threads: {}", works);
     log::info!("kcp listener started: {}", args.tunnel);
     log::info!("all connections will be forwarded to {}", args.to);
 
     loop {
-        let kcp_stream = kcp_tunnel::KcpTunnelStream(kcp_listener.accept().await?);
-        let tcp_stream = tokio::net::TcpStream::connect(args.to).await?;
+        let (kcp_conv, addr, kcp_stream) = kcp_listener.accept().await?;
+        let kcp_stream = kcp_tunnel::KcpTunnelStream(kcp_stream);
 
-        runtime.spawn(async move {
-            log::debug!("start forward {} -> {}", args.tunnel, args.to);
+        let tcp_stream = match tokio::net::TcpStream::connect(args.to).await {
+            Ok(stream) => stream,
+            Err(e) => {
+                log::warn!("forwarding failed: {}", e);
+                continue;
+            }
+        };
 
-            let (mut kcp_reader, mut kcp_writer) = tokio::io::split(kcp_stream);
+        tokio::spawn(async move {
+            let addr = format!("{} -> {}({})", args.to, addr, kcp_conv);
+
+            log::debug!("start forward {}", addr);
+
             let (mut tcp_reader, mut tcp_writer) = tokio::io::split(tcp_stream);
+            let (mut kcp_reader, mut kcp_writer) = tokio::io::split(kcp_stream);
 
-            tokio::join!(
-                tokio::io::copy(&mut kcp_reader, &mut tcp_writer),
-                tokio::io::copy(&mut tcp_reader, &mut kcp_writer),
-            )
+            tokio::select!(
+                _ = tokio::io::copy(&mut kcp_reader, &mut tcp_writer) => {
+
+                },
+                _ = tokio::io::copy(&mut tcp_reader, &mut kcp_writer) => {
+
+                },
+            );
+
+            log::debug!("close stream {}", addr);
         });
     }
 }

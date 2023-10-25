@@ -79,14 +79,22 @@ impl kcp_rust::KcpRuntime for KcpRuntimeWithTokio {
 impl kcp_rust::Runner for KcpRunnerWithTokio {
     type Err = std::io::Error;
 
-    fn call(process: kcp_rust::Processor) -> std::result::Result<(), Self::Err> {
-        std::thread::spawn(move || {
-            tokio::runtime::Builder::new_current_thread()
+    fn start(background: kcp_rust::Background) -> std::result::Result<(), Self::Err> {
+        std::thread::Builder::new()
+            .name(format!("kcp[{:?}]", background.kind()).to_lowercase())
+            .spawn(|| {
+                let kind = background.kind();
+                let mut runtime = tokio::runtime::Builder::new_current_thread();
+                if kind == kcp_rust::TaskKind::Closer {
+                    &mut runtime
+                } else {
+                    runtime.event_interval(2).global_queue_interval(2)
+                }
                 .enable_all()
                 .build()
                 .unwrap()
-                .block_on(process)
-        });
+                .block_on(background)
+            })?;
         Ok(())
     }
 }
@@ -96,7 +104,8 @@ impl kcp_rust::Timer for KcpTimerWithTokio {
     type Output = BoxedFuture<()>;
 
     fn sleep(&self, time: std::time::Duration) -> Self::Output {
-        Box::pin(async move { tokio::time::sleep(time).await })
+        // log::debug!("sleep {:?}", time);
+        Box::pin(tokio::time::sleep(time))
     }
 }
 
@@ -109,10 +118,11 @@ where
         cx: &mut std::task::Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
-        match kcp_rust::AsyncRead::poll_read(Pin::new(&mut self.0), cx, buf.initialized_mut())? {
+        match kcp_rust::AsyncRead::poll_read(Pin::new(&mut self.0), cx, buf.initialize_unfilled())?
+        {
             std::task::Poll::Pending => std::task::Poll::Pending,
             std::task::Poll::Ready(n) => {
-                buf.advance(n);
+                buf.set_filled(n);
                 std::task::Poll::Ready(Ok(()))
             }
         }
