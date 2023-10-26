@@ -1,7 +1,7 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
 use kcp_rust::AsyncWrite;
-use tokio::io::ReadBuf;
+use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadBuf};
 
 #[derive(Clone)]
 pub struct TunnelSocket(pub Arc<tokio::net::UdpSocket>);
@@ -153,5 +153,27 @@ where
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), std::io::Error>> {
         Pin::new(&mut self.0).poll_close(cx)
+    }
+}
+
+pub async fn copy<R, W>(mut reader: R, mut writer: W) -> std::io::Result<()>
+where
+    R: tokio::io::AsyncRead + Unpin,
+    W: tokio::io::AsyncWrite + Unpin,
+{
+    let mut buf = unsafe {
+        let mut buf = Vec::with_capacity(1024 * 1024 * 4);
+        buf.set_len(1024 * 1024 * 4);
+        buf
+    };
+
+    loop {
+        let n = reader.read(&mut buf).await?;
+
+        if n == 0 {
+            break Ok(());
+        }
+
+        writer.write_all(&buf[..n]).await?;
     }
 }

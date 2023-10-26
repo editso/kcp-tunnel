@@ -1,6 +1,6 @@
 use clap::Parser;
 use kcp_rust::Config;
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, str::FromStr, sync::Arc};
 
 use kcp_tunnel::{KcpRuntimeWithTokio, KcpTunnelStream};
 
@@ -24,10 +24,15 @@ async fn main() -> std::io::Result<()> {
         .filter_level(log::LevelFilter::Trace)
         .init();
 
-    let args = Args::parse();
+    // let args = Args::parse();
+    let config = Config::default();
+    let args = Args {
+        listen: SocketAddr::from_str("0.0.0.0:7777").unwrap(),
+        tunnel: SocketAddr::from_str("127.0.0.1:8080").unwrap(),
+        works: 0,
+    };
 
     let works = args.works.min(6);
-    let config = Config::default();
 
     let mut kcp_tunnel = kcp_rust::KcpConnector::new::<KcpRuntimeWithTokio>(
         {
@@ -58,10 +63,10 @@ async fn main() -> std::io::Result<()> {
             let (mut kcp_reader, mut kcp_writer) = tokio::io::split(kcp_stream);
 
             tokio::select!(
-                _ = tokio::io::copy(&mut kcp_reader, &mut tcp_writer) => {
+                _ = kcp_tunnel::copy(&mut kcp_reader, &mut tcp_writer) => {
 
                 },
-                _ = tokio::io::copy(&mut tcp_reader, &mut kcp_writer) => {
+                _ = kcp_tunnel::copy(&mut tcp_reader, &mut kcp_writer) => {
 
                 },
             );
