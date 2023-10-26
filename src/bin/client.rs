@@ -1,6 +1,6 @@
 use clap::Parser;
 use kcp_rust::Config;
-use std::{net::SocketAddr, str::FromStr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 
 use kcp_tunnel::{KcpRuntimeWithTokio, KcpTunnelStream};
 
@@ -24,13 +24,8 @@ async fn main() -> std::io::Result<()> {
         .filter_level(log::LevelFilter::Trace)
         .init();
 
-    // let args = Args::parse();
+    let args = Args::parse();
     let config = Config::default();
-    let args = Args {
-        listen: SocketAddr::from_str("0.0.0.0:7777").unwrap(),
-        tunnel: SocketAddr::from_str("127.0.0.1:8080").unwrap(),
-        works: 0,
-    };
 
     let works = args.works.min(6);
 
