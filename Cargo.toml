@@ -14,7 +14,7 @@ name = "kcp_tuns"
 path = "src/bin/server.rs"
 
 [dependencies.kcp-rust]
-path = "../kcp-rust"
+path = "./modules/kcp-rust"
 
 [profile.release]
 lto = true

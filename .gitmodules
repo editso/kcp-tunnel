@@ -1,0 +1,3 @@
+[submodule "modules/kcp-rust"]
+	path = modules/kcp-rust
+	url = https://github.com/editso/kcp-rust.git
