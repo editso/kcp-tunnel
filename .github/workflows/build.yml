@@ -2,6 +2,11 @@ name: Release ALL
 
 on:
   workflow_dispatch:
+    inputs:
+        tag-name:
+          type: string
+          default: v0.1.0
+          required: true
 
 jobs:
   build-mac-release:
@@ -37,7 +42,7 @@ jobs:
       - name: Upload Release
         uses: softprops/action-gh-release@v1
         with:
-            tag_name: ${{github.ref}}
+            tag_name: ${{github.event.inputs.tag-name}}
             token: ${{ secrets.GITHUB_TOKEN }}
             files: |
                 ${{ matrix.arch }}.zip
@@ -75,7 +80,7 @@ jobs:
       - name: Upload Release
         uses: softprops/action-gh-release@v1
         with:
-            tag_name: ${{github.ref}}
+            tag_name: ${{github.event.inputs.tag-name}}
             token: ${{ secrets.GITHUB_TOKEN }}
             files: |
                 ${{ matrix.arch }}.zip
@@ -114,7 +119,7 @@ jobs:
       - name: Upload Release
         uses: softprops/action-gh-release@v1
         with:
-            tag_name: ${{github.ref}}
+            tag_name: ${{github.event.inputs.tag-name}}
             token: ${{ secrets.GITHUB_TOKEN }}
             files: |
                 ${{ matrix.arch }}.zip
